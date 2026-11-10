@@ -20,6 +20,7 @@ class MainActivity : Activity() {
     private val selected = linkedSetOf<String>()
     private lateinit var appList: LinearLayout
     private lateinit var status: TextView
+    private lateinit var modeDescription: TextView
     private var mode = FirewallVpnService.MODE_BLOCK_SELECTED
     private val vpnRequestCode = 4102
 
@@ -79,8 +80,7 @@ class MainActivity : Activity() {
         }
         root.addView(modes)
 
-        val modeDescription = TextView(this).apply {
-            tag = "mode_description"
+        modeDescription = TextView(this).apply {
             textSize = 13f
             setTextColor(0xFF4B5565.toInt())
             setPadding(0, 4, 0, 12)
@@ -123,8 +123,7 @@ class MainActivity : Activity() {
     }
 
     private fun updateModeDescription() {
-        val description = findViewByTag<TextView>("mode_description") ?: return
-        description.text = if (mode == FirewallVpnService.MODE_ALLOW_SELECTED) {
+        modeDescription.text = if (mode == FirewallVpnService.MODE_ALLOW_SELECTED) {
             "Zaznaczone aplikacje będą miały internet. Niezaznaczone zostaną zablokowane."
         } else {
             "Zaznaczone aplikacje zostaną zablokowane. Pozostałe będą miały internet."
