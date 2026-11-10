@@ -26,7 +26,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selected.addAll(prefs.getStringSet("selected_apps", emptySet()) ?: emptySet())
+        selected.addAll(prefs.getStringSet("selected_apps", prefs.getStringSet("blocked_apps", emptySet()) ?: emptySet()) ?: emptySet())
         mode = prefs.getString("mode", FirewallVpnService.MODE_BLOCK_SELECTED)
             ?: FirewallVpnService.MODE_BLOCK_SELECTED
         buildScreen()
