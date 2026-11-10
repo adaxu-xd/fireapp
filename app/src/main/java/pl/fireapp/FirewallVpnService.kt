@@ -16,6 +16,9 @@ class FirewallVpnService : VpnService() {
         const val ACTION_START = "pl.fireapp.START"
         const val ACTION_STOP = "pl.fireapp.STOP"
         const val EXTRA_PACKAGES = "packages"
+        const val EXTRA_MODE = "mode"
+        const val MODE_BLOCK_SELECTED = "block_selected"
+        const val MODE_ALLOW_SELECTED = "allow_selected"
         private const val CHANNEL_ID = "fireapp_firewall"
         private const val NOTIFICATION_ID = 7301
     }
@@ -34,23 +37,31 @@ class FirewallVpnService : VpnService() {
             return START_NOT_STICKY
         }
 
-        val packages = if (intent?.action == ACTION_START) {
-            intent.getStringArrayListExtra(EXTRA_PACKAGES) ?: arrayListOf()
+        val packages: List<String>
+        val mode: String
+        if (intent?.action == ACTION_START) {
+            packages = intent.getStringArrayListExtra(EXTRA_PACKAGES) ?: arrayListOf()
+            mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_BLOCK_SELECTED
+            prefs.edit()
+                .putStringSet("selected_apps", packages.toSet())
+                .putString("mode", mode)
+                .apply()
         } else if (prefs.getBoolean("active", false)) {
-            ArrayList(prefs.getStringSet("blocked_apps", emptySet()) ?: emptySet())
+            packages = ArrayList(prefs.getStringSet("selected_apps", emptySet()) ?: emptySet())
+            mode = prefs.getString("mode", MODE_BLOCK_SELECTED) ?: MODE_BLOCK_SELECTED
         } else {
             stopSelf()
             return START_NOT_STICKY
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification())
-        startFirewall(packages)
+        startForeground(NOTIFICATION_ID, buildNotification(mode))
+        startFirewall(packages, mode)
         return START_STICKY
     }
 
-    private fun startFirewall(packages: List<String>) {
+    private fun startFirewall(packages: List<String>, mode: String) {
         stopTunnel()
-        if (packages.isEmpty()) {
+        if (mode != MODE_ALLOW_SELECTED && packages.isEmpty()) {
             prefs.edit().putBoolean("active", false).apply()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -59,7 +70,7 @@ class FirewallVpnService : VpnService() {
 
         try {
             val builder = Builder()
-                .setSession("FireApp — blokada aplikacji")
+                .setSession("FireApp — zapora aplikacji")
                 .setMtu(1500)
                 .addAddress("10.111.0.1", 32)
                 .addRoute("0.0.0.0", 0)
@@ -67,17 +78,24 @@ class FirewallVpnService : VpnService() {
                 .addAddress("fd00:1:fd00:1::1", 128)
                 .addRoute("::", 0)
 
-            var count = 0
+            var validPackages = 0
             for (pkg in packages.distinct()) {
                 if (pkg == packageName) continue
                 try {
-                    builder.addAllowedApplication(pkg)
-                    count++
+                    if (mode == MODE_ALLOW_SELECTED) {
+                        // Selected apps bypass the VPN and use the normal Wi-Fi/mobile network.
+                        builder.addDisallowedApplication(pkg)
+                    } else {
+                        // Only selected apps enter the VPN; their packets are discarded below.
+                        builder.addAllowedApplication(pkg)
+                    }
+                    validPackages++
                 } catch (_: Exception) {
                     // Skip an app that was uninstalled after it was selected.
                 }
             }
-            if (count == 0) {
+
+            if (mode != MODE_ALLOW_SELECTED && validPackages == 0) {
                 prefs.edit().putBoolean("active", false).apply()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -100,8 +118,7 @@ class FirewallVpnService : VpnService() {
                 try {
                     FileInputStream(descriptor.fileDescriptor).use { input ->
                         while (running.get()) {
-                            // This is the firewall: packets from the selected apps are discarded,
-                            // never forwarded to a physical network interface.
+                            // Traffic routed into this local VPN is intentionally dropped.
                             if (input.read(packetBuffer) < 0) break
                         }
                     }
@@ -114,7 +131,7 @@ class FirewallVpnService : VpnService() {
                 isDaemon = true
                 start()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             prefs.edit().putBoolean("active", false).apply()
             stopTunnel()
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -142,7 +159,7 @@ class FirewallVpnService : VpnService() {
         super.onDestroy()
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(mode: String): Notification {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -153,10 +170,15 @@ class FirewallVpnService : VpnService() {
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val message = if (mode == MODE_ALLOW_SELECTED) {
+            "Internet mają tylko zaznaczone aplikacje."
+        } else {
+            "Zaznaczone aplikacje nie mają internetu."
+        }
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("FireApp działa")
-                .setContentText("Wybrane aplikacje nie mają dostępu do internetu.")
+                .setContentText(message)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(openApp)
                 .setOngoing(true)
@@ -165,7 +187,7 @@ class FirewallVpnService : VpnService() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
                 .setContentTitle("FireApp działa")
-                .setContentText("Wybrane aplikacje nie mają dostępu do internetu.")
+                .setContentText(message)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(openApp)
                 .setOngoing(true)
