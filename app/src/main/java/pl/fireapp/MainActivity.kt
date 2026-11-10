@@ -24,6 +24,7 @@ class MainActivity : Activity() {
     private val vpnRequestCode = 4102
     private var permissionRequestInProgress = false
     private var startRequested = false
+    private var manuallyStopped = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -174,6 +175,10 @@ class MainActivity : Activity() {
 
     private fun autoStartFirewall() {
         if (prefs.getBoolean("active", false)) return
+        if (mode == FirewallVpnService.MODE_BLOCK_SELECTED && selected.isEmpty()) {
+            status.text = "Zaznacz aplikacje, które mają być blokowane."
+            return
+        }
         requestPermissionAndStart()
     }
 
@@ -225,11 +230,16 @@ class MainActivity : Activity() {
         if (prefs.getBoolean("active", false) || startRequested) {
             startFirewall()
             status.text = "Zastosowano zmiany…"
+        } else if (!manuallyStopped &&
+            (mode == FirewallVpnService.MODE_ALLOW_SELECTED || selected.isNotEmpty())
+        ) {
+            requestPermissionAndStart()
         }
     }
 
     private fun disableFirewall() {
         startRequested = false
+        manuallyStopped = true
         prefs.edit().putBoolean("active", false).apply()
         try {
             startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_STOP))
