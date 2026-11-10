@@ -210,7 +210,11 @@ class MainActivity : Activity() {
             .putString("mode", mode)
             .apply()
         if (mode == FirewallVpnService.MODE_BLOCK_SELECTED && selected.isEmpty()) {
-            status.text = "Zaznacz aplikacje, które mają być blokowane."
+            startRequested = false
+            try {
+                startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_STOP))
+            } catch (_: Exception) { }
+            status.text = "Nie wybrano aplikacji do blokowania. Zapora jest zatrzymana."
             return
         }
         val serviceIntent = Intent(this, FirewallVpnService::class.java)
