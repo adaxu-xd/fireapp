@@ -10,6 +10,8 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 
@@ -18,17 +20,20 @@ class MainActivity : Activity() {
     private val selected = linkedSetOf<String>()
     private lateinit var appList: LinearLayout
     private lateinit var status: TextView
+    private var mode = FirewallVpnService.MODE_BLOCK_SELECTED
     private val vpnRequestCode = 4102
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selected.addAll(prefs.getStringSet("blocked_apps", emptySet()) ?: emptySet())
+        selected.addAll(prefs.getStringSet("selected_apps", emptySet()) ?: emptySet())
+        mode = prefs.getString("mode", FirewallVpnService.MODE_BLOCK_SELECTED)
+            ?: FirewallVpnService.MODE_BLOCK_SELECTED
         buildScreen()
         renderApps()
         status.text = if (prefs.getBoolean("active", false)) {
-            "Blokada jest włączona dla zapisanych aplikacji."
+            "Zapora jest uruchomiona. Sprawdź działanie wybranego trybu."
         } else {
-            "Blokada jest wyłączona."
+            "Zapora jest wyłączona."
         }
     }
 
@@ -45,11 +50,44 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         })
         root.addView(TextView(this).apply {
-            text = "Wybierz aplikacje, którym chcesz zablokować dostęp do internetu."
+            text = "Wybierz sposób kontrolowania dostępu aplikacji do internetu:"
             textSize = 15f
             setTextColor(0xFF4B5565.toInt())
-            setPadding(0, 8, 0, 12)
+            setPadding(0, 8, 0, 8)
         })
+
+        val modes = RadioGroup(this).apply {
+            orientation = RadioGroup.VERTICAL
+            val block = RadioButton(this@MainActivity).apply {
+                id = 1
+                text = "Blokuj internet wybranym aplikacjom"
+                isChecked = mode == FirewallVpnService.MODE_BLOCK_SELECTED
+            }
+            val allow = RadioButton(this@MainActivity).apply {
+                id = 2
+                text = "Dawaj internet tylko wybranym aplikacjom"
+                isChecked = mode == FirewallVpnService.MODE_ALLOW_SELECTED
+            }
+            addView(block)
+            addView(allow)
+            setOnCheckedChangeListener { _, checkedId ->
+                mode = if (checkedId == 2) FirewallVpnService.MODE_ALLOW_SELECTED
+                    else FirewallVpnService.MODE_BLOCK_SELECTED
+                prefs.edit().putString("mode", mode).apply()
+                updateModeDescription()
+            }
+        }
+        root.addView(modes)
+
+        val modeDescription = TextView(this).apply {
+            tag = "mode_description"
+            textSize = 13f
+            setTextColor(0xFF4B5565.toInt())
+            setPadding(0, 4, 0, 12)
+        }
+        root.addView(modeDescription)
+        updateModeDescription()
+
         status = TextView(this).apply {
             textSize = 14f
             setTextColor(0xFF14532D.toInt())
@@ -59,7 +97,7 @@ class MainActivity : Activity() {
         root.addView(status)
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         buttons.addView(Button(this).apply {
-            text = "Włącz blokadę"
+            text = "Włącz zaporę"
             setOnClickListener { saveAndEnable() }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         buttons.addView(Button(this).apply {
@@ -84,6 +122,26 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
+    private fun updateModeDescription() {
+        val description = findViewByTag<TextView>("mode_description") ?: return
+        description.text = if (mode == FirewallVpnService.MODE_ALLOW_SELECTED) {
+            "Zaznaczone aplikacje będą miały internet. Niezaznaczone zostaną zablokowane."
+        } else {
+            "Zaznaczone aplikacje zostaną zablokowane. Pozostałe będą miały internet."
+        }
+    }
+
+    private inline fun <reified T : android.view.View> findViewByTag(tag: String): T? {
+        fun search(view: android.view.View): T? {
+            if (view.tag == tag && view is T) return view
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) search(view.getChildAt(i))?.let { return it }
+            }
+            return null
+        }
+        return search(window.decorView)
+    }
+
     private fun renderApps() {
         appList.removeAllViews()
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -102,7 +160,7 @@ class MainActivity : Activity() {
                 isChecked = selected.contains(app.packageName)
                 setOnCheckedChangeListener { _, checked ->
                     if (checked) selected.add(app.packageName) else selected.remove(app.packageName)
-                    prefs.edit().putStringSet("blocked_apps", selected.toSet()).apply()
+                    prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
                 }
             }
             try {
@@ -123,11 +181,14 @@ class MainActivity : Activity() {
     }
 
     private fun saveAndEnable() {
-        prefs.edit().putStringSet("blocked_apps", selected.toSet()).apply()
-        if (selected.isEmpty()) {
+        prefs.edit()
+            .putStringSet("selected_apps", selected.toSet())
+            .putString("mode", mode)
+            .apply()
+        if (mode == FirewallVpnService.MODE_BLOCK_SELECTED && selected.isEmpty()) {
             AlertDialog.Builder(this)
                 .setTitle("Brak wybranych aplikacji")
-                .setMessage("Zaznacz przynajmniej jedną aplikację.")
+                .setMessage("W trybie blokowania zaznacz przynajmniej jedną aplikację.")
                 .setPositiveButton("OK", null).show()
             return
         }
@@ -145,7 +206,7 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == vpnRequestCode) {
             if (resultCode == RESULT_OK) startFirewall()
-            else status.text = "Nie przyznano zgody VPN. Blokada nie została włączona."
+            else status.text = "Nie przyznano zgody VPN. Zapora nie została włączona."
         }
     }
 
@@ -153,9 +214,10 @@ class MainActivity : Activity() {
         val serviceIntent = Intent(this, FirewallVpnService::class.java)
             .setAction(FirewallVpnService.ACTION_START)
             .putStringArrayListExtra(FirewallVpnService.EXTRA_PACKAGES, ArrayList(selected))
+            .putExtra(FirewallVpnService.EXTRA_MODE, mode)
         try {
             startForegroundService(serviceIntent)
-            status.text = "Włączanie blokady dla ${selected.size} aplikacji…"
+            status.text = "Uruchamianie zapory…"
         } catch (e: Exception) {
             status.text = "Błąd uruchamiania: ${e.localizedMessage ?: "nieznany błąd"}"
         }
@@ -166,6 +228,6 @@ class MainActivity : Activity() {
         try {
             startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_STOP))
         } catch (_: Exception) { }
-        status.text = "Blokada wyłączona."
+        status.text = "Zapora wyłączona."
     }
 }
