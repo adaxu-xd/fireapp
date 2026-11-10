@@ -23,6 +23,7 @@ class MainActivity : Activity() {
     private var mode = FirewallVpnService.MODE_BLOCK_SELECTED
     private val vpnRequestCode = 4102
     private var permissionRequestInProgress = false
+    private var startRequested = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -213,6 +214,7 @@ class MainActivity : Activity() {
             .putExtra(FirewallVpnService.EXTRA_MODE, mode)
         try {
             startForegroundService(serviceIntent)
+            startRequested = true
             status.text = "Uruchamianie zapory…"
         } catch (e: Exception) {
             status.text = "Błąd uruchamiania: ${e.localizedMessage ?: "nieznany błąd"}"
@@ -220,13 +222,14 @@ class MainActivity : Activity() {
     }
 
     private fun applyChangesIfRunning() {
-        if (prefs.getBoolean("active", false)) {
+        if (prefs.getBoolean("active", false) || startRequested) {
             startFirewall()
             status.text = "Zastosowano zmiany…"
         }
     }
 
     private fun disableFirewall() {
+        startRequested = false
         prefs.edit().putBoolean("active", false).apply()
         try {
             startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_STOP))
