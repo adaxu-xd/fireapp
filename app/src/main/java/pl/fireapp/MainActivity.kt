@@ -1,7 +1,6 @@
 package pl.fireapp
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
@@ -23,19 +22,26 @@ class MainActivity : Activity() {
     private lateinit var modeDescription: TextView
     private var mode = FirewallVpnService.MODE_BLOCK_SELECTED
     private val vpnRequestCode = 4102
+    private var permissionRequestInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selected.addAll(prefs.getStringSet("selected_apps", prefs.getStringSet("blocked_apps", emptySet()) ?: emptySet()) ?: emptySet())
+        selected.addAll(
+            prefs.getStringSet(
+                "selected_apps",
+                prefs.getStringSet("blocked_apps", emptySet()) ?: emptySet()
+            ) ?: emptySet()
+        )
         mode = prefs.getString("mode", FirewallVpnService.MODE_BLOCK_SELECTED)
             ?: FirewallVpnService.MODE_BLOCK_SELECTED
         buildScreen()
         renderApps()
         status.text = if (prefs.getBoolean("active", false)) {
-            "Zapora jest uruchomiona. Sprawdź działanie wybranego trybu."
+            "Zapora działa. Zmiany są stosowane na bieżąco."
         } else {
-            "Zapora jest wyłączona."
+            "Uruchamianie zapory…"
         }
+        autoStartFirewall()
     }
 
     private fun buildScreen() {
@@ -59,23 +65,22 @@ class MainActivity : Activity() {
 
         val modes = RadioGroup(this).apply {
             orientation = RadioGroup.VERTICAL
-            val block = RadioButton(this@MainActivity).apply {
+            addView(RadioButton(this@MainActivity).apply {
                 id = 1
                 text = "Blokuj internet wybranym aplikacjom"
                 isChecked = mode == FirewallVpnService.MODE_BLOCK_SELECTED
-            }
-            val allow = RadioButton(this@MainActivity).apply {
+            })
+            addView(RadioButton(this@MainActivity).apply {
                 id = 2
                 text = "Dawaj internet tylko wybranym aplikacjom"
                 isChecked = mode == FirewallVpnService.MODE_ALLOW_SELECTED
-            }
-            addView(block)
-            addView(allow)
+            })
             setOnCheckedChangeListener { _, checkedId ->
                 mode = if (checkedId == 2) FirewallVpnService.MODE_ALLOW_SELECTED
                     else FirewallVpnService.MODE_BLOCK_SELECTED
                 prefs.edit().putString("mode", mode).apply()
                 updateModeDescription()
+                applyChangesIfRunning()
             }
         }
         root.addView(modes)
@@ -95,20 +100,15 @@ class MainActivity : Activity() {
             setBackgroundColor(0xFFE2F3E9.toInt())
         }
         root.addView(status)
-        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        buttons.addView(Button(this).apply {
-            text = "Włącz zaporę"
-            setOnClickListener { saveAndEnable() }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        buttons.addView(Button(this).apply {
-            text = "Wyłącz"
-            setOnClickListener { disableFirewall() }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        root.addView(buttons)
+
         root.addView(Button(this).apply {
-            text = "Odśwież aplikacje"
-            setOnClickListener { renderApps() }
-        })
+            text = "STOP"
+            setOnClickListener { disableFirewall() }
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
         root.addView(TextView(this).apply {
             text = "Zainstalowane aplikacje"
             textSize = 19f
@@ -118,27 +118,18 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this)
         appList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(appList)
-        root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(scroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
         setContentView(root)
     }
 
     private fun updateModeDescription() {
         modeDescription.text = if (mode == FirewallVpnService.MODE_ALLOW_SELECTED) {
-            "Zaznaczone aplikacje będą miały internet. Niezaznaczone zostaną zablokowane."
+            "Zaznaczone aplikacje mają internet. Nowo zainstalowane aplikacje dostają internet automatycznie."
         } else {
-            "Zaznaczone aplikacje zostaną zablokowane. Pozostałe będą miały internet."
+            "Zaznaczone aplikacje są blokowane. Pozostałe, także nowe, mają internet."
         }
-    }
-
-    private inline fun <reified T : android.view.View> findViewByTag(tag: String): T? {
-        fun search(view: android.view.View): T? {
-            if (view.tag == tag && view is T) return view
-            if (view is ViewGroup) {
-                for (i in 0 until view.childCount) search(view.getChildAt(i))?.let { return it }
-            }
-            return null
-        }
-        return search(window.decorView)
     }
 
     private fun renderApps() {
@@ -160,6 +151,7 @@ class MainActivity : Activity() {
                 setOnCheckedChangeListener { _, checked ->
                     if (checked) selected.add(app.packageName) else selected.remove(app.packageName)
                     prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
+                    applyChangesIfRunning()
                 }
             }
             try {
@@ -179,20 +171,16 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun saveAndEnable() {
-        prefs.edit()
-            .putStringSet("selected_apps", selected.toSet())
-            .putString("mode", mode)
-            .apply()
-        if (mode == FirewallVpnService.MODE_BLOCK_SELECTED && selected.isEmpty()) {
-            AlertDialog.Builder(this)
-                .setTitle("Brak wybranych aplikacji")
-                .setMessage("W trybie blokowania zaznacz przynajmniej jedną aplikację.")
-                .setPositiveButton("OK", null).show()
-            return
-        }
+    private fun autoStartFirewall() {
+        if (prefs.getBoolean("active", false)) return
+        requestPermissionAndStart()
+    }
+
+    private fun requestPermissionAndStart() {
+        if (permissionRequestInProgress) return
         val permissionIntent = VpnService.prepare(this)
         if (permissionIntent != null) {
+            permissionRequestInProgress = true
             @Suppress("DEPRECATION")
             startActivityForResult(permissionIntent, vpnRequestCode)
         } else {
@@ -204,12 +192,21 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == vpnRequestCode) {
+            permissionRequestInProgress = false
             if (resultCode == RESULT_OK) startFirewall()
-            else status.text = "Nie przyznano zgody VPN. Zapora nie została włączona."
+            else status.text = "Nie przyznano zgody VPN. Zapora nie została uruchomiona."
         }
     }
 
     private fun startFirewall() {
+        prefs.edit()
+            .putStringSet("selected_apps", selected.toSet())
+            .putString("mode", mode)
+            .apply()
+        if (mode == FirewallVpnService.MODE_BLOCK_SELECTED && selected.isEmpty()) {
+            status.text = "Zaznacz aplikacje, które mają być blokowane."
+            return
+        }
         val serviceIntent = Intent(this, FirewallVpnService::class.java)
             .setAction(FirewallVpnService.ACTION_START)
             .putStringArrayListExtra(FirewallVpnService.EXTRA_PACKAGES, ArrayList(selected))
@@ -222,11 +219,18 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun applyChangesIfRunning() {
+        if (prefs.getBoolean("active", false)) {
+            startFirewall()
+            status.text = "Zastosowano zmiany…"
+        }
+    }
+
     private fun disableFirewall() {
         prefs.edit().putBoolean("active", false).apply()
         try {
             startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_STOP))
         } catch (_: Exception) { }
-        status.text = "Zapora wyłączona."
+        status.text = "Zapora zatrzymana. Otwórz FireApp ponownie, aby uruchomić ją automatycznie."
     }
 }
