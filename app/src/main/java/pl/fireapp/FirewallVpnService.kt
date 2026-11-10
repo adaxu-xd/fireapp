@@ -4,7 +4,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -27,6 +30,42 @@ class FirewallVpnService : VpnService() {
     @Volatile private var tun: ParcelFileDescriptor? = null
     private var reader: Thread? = null
     private val running = AtomicBoolean(false)
+    private var packageReceiverRegistered = false
+
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_PACKAGE_ADDED) return
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
+            val addedPackage = intent.data?.schemeSpecificPart ?: return
+            if (addedPackage == packageName || !prefs.getBoolean("active", false)) return
+
+            val currentMode = prefs.getString("mode", MODE_BLOCK_SELECTED) ?: MODE_BLOCK_SELECTED
+            if (currentMode == MODE_ALLOW_SELECTED) {
+                val selected = prefs.getStringSet("selected_apps", emptySet())?.toMutableSet()
+                    ?: mutableSetOf()
+                if (selected.add(addedPackage)) {
+                    prefs.edit().putStringSet("selected_apps", selected).apply()
+                    // In allow-list mode, a newly installed app is immediately added
+                    // to the apps that bypass the VPN and therefore keep internet access.
+                    startFirewall(selected.toList(), currentMode)
+                }
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply {
+            addDataScheme("package")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(packageReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(packageReceiver, filter)
+        }
+        packageReceiverRegistered = true
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -83,10 +122,10 @@ class FirewallVpnService : VpnService() {
                 if (pkg == packageName) continue
                 try {
                     if (mode == MODE_ALLOW_SELECTED) {
-                        // Selected apps bypass the VPN and use the normal Wi-Fi/mobile network.
+                        // Selected apps bypass the VPN and keep normal network access.
                         builder.addDisallowedApplication(pkg)
                     } else {
-                        // Only selected apps enter the VPN; their packets are discarded below.
+                        // Only selected apps enter the VPN; their packets are discarded.
                         builder.addAllowedApplication(pkg)
                     }
                     validPackages++
@@ -155,6 +194,10 @@ class FirewallVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        if (packageReceiverRegistered) {
+            try { unregisterReceiver(packageReceiver) } catch (_: Exception) { }
+            packageReceiverRegistered = false
+        }
         stopTunnel()
         super.onDestroy()
     }
