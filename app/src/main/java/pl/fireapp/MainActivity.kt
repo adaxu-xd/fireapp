@@ -25,6 +25,7 @@ class MainActivity : Activity() {
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
     private lateinit var appList: ListView
+    private lateinit var appEmpty: TextView
     private val appLoader = Executors.newSingleThreadExecutor()
     private data class AppEntry(val packageName: String, val name: String, val icon: android.graphics.drawable.Drawable)
     private inner class AppsAdapter(private val entries: List<AppEntry>) : BaseAdapter() {
@@ -298,6 +299,13 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(4))
             clipToPadding = false
         }
+        appEmpty = label("Nie znaleziono aplikacji.", 14f, muted).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(28), 0, dp(28))
+        }
+        top.addView(appEmpty, LinearLayout.LayoutParams(-1, -2))
+        appEmpty.visibility = View.GONE
+        appList.emptyView = appEmpty
         top.addView(appList, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(top)
         renderApps()
@@ -330,12 +338,6 @@ class MainActivity : Activity() {
                 if (currentPage != "apps" || !::appList.isInitialized) return@runOnUiThread
                 try { appList.removeHeaderView(loading) } catch (_: Exception) {}
                 appList.adapter = AppsAdapter(entries)
-                if (entries.isEmpty()) {
-                    val empty = label("Nie znaleziono aplikacji.", 14f, muted).apply {
-                        gravity = Gravity.CENTER; setPadding(0, dp(28), 0, dp(28))
-                    }
-                    appList.addHeaderView(empty, null, false)
-                }
             }
         }
     }
