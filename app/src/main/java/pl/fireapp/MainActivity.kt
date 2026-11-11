@@ -29,6 +29,8 @@ class MainActivity : Activity() {
     private lateinit var toggleButton: TextView
     private lateinit var appList: ListView
     private lateinit var appEmpty: TextView
+    private lateinit var selectAllButton: TextView
+    private var loadedAppEntries: List<AppEntry> = emptyList()
     private val appLoader = Executors.newSingleThreadExecutor()
     private data class AppEntry(val packageName: String, val name: String, val icon: android.graphics.drawable.Drawable)
     private inner class AppsAdapter(private val entries: List<AppEntry>) : BaseAdapter() {
@@ -68,6 +70,7 @@ class MainActivity : Activity() {
             check.setOnCheckedChangeListener { _, checked ->
                 if (checked) selected.add(entry.packageName) else selected.remove(entry.packageName)
                 prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
+                updateSelectAllButton()
                 applyChangesIfRunning()
             }
             row.setOnClickListener { check.isChecked = !check.isChecked }
@@ -342,6 +345,23 @@ class MainActivity : Activity() {
                 setPadding(dp(14), dp(14), dp(14), dp(14))
                 background = card(selectedPanelColor, borderColor, 16)
             })
+        selectAllButton = shellButton("✓   Zaznacz wszystkie", {
+            val allSelected = loadedAppEntries.isNotEmpty() &&
+                loadedAppEntries.all { selected.contains(it.packageName) }
+            if (allSelected) {
+                loadedAppEntries.forEach { selected.remove(it.packageName) }
+            } else {
+                loadedAppEntries.forEach { selected.add(it.packageName) }
+            }
+            prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
+            (appList.adapter as? BaseAdapter)?.notifyDataSetChanged()
+            updateSelectAllButton()
+            applyChangesIfRunning()
+        }, true)
+        top.addView(selectAllButton, LinearLayout.LayoutParams(-1, dp(48)).apply {
+            topMargin = dp(12)
+            bottomMargin = dp(4)
+        })
         top.addView(label("Zainstalowane aplikacje", 14f, muted, true).apply { setPadding(dp(4), dp(14), 0, dp(8)) })
         appList = ListView(this).apply {
             divider = null
@@ -390,9 +410,18 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (currentPage != "apps" || !::appList.isInitialized) return@runOnUiThread
                 try { appList.removeHeaderView(loading) } catch (_: Exception) {}
+                loadedAppEntries = entries
                 appList.adapter = AppsAdapter(entries)
+                updateSelectAllButton()
             }
         }
+    }
+
+    private fun updateSelectAllButton() {
+        if (!::selectAllButton.isInitialized) return
+        val allSelected = loadedAppEntries.isNotEmpty() &&
+            loadedAppEntries.all { selected.contains(it.packageName) }
+        selectAllButton.text = if (allSelected) "✓   Odznacz wszystkie" else "✓   Zaznacz wszystkie"
     }
 
 
