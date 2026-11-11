@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     private lateinit var appEmpty: TextView
     private lateinit var selectAllButton: TextView
     private var loadedAppEntries: List<AppEntry> = emptyList()
+    private var selectAllWhenLoaded = false
     private val appLoader = Executors.newSingleThreadExecutor()
     private data class AppEntry(val packageName: String, val name: String, val icon: android.graphics.drawable.Drawable)
     private inner class AppsAdapter(private val entries: List<AppEntry>) : BaseAdapter() {
@@ -281,6 +282,10 @@ class MainActivity : Activity() {
             .apply { setPadding(dp(4), 0, 0, dp(8)) })
         body.addView(shellButton("▦   Wybierz aplikacje", { showPage("apps") }),
             LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(12) })
+        body.addView(shellButton("✓   Zaznacz wszystkie", {
+            selectAllWhenLoaded = true
+            showPage("apps")
+        }, true), LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(8) })
         content.addView(scroll)
     }
 
@@ -411,6 +416,12 @@ class MainActivity : Activity() {
                 if (currentPage != "apps" || !::appList.isInitialized) return@runOnUiThread
                 try { appList.removeHeaderView(loading) } catch (_: Exception) {}
                 loadedAppEntries = entries
+                if (selectAllWhenLoaded) {
+                    entries.forEach { selected.add(it.packageName) }
+                    prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
+                    selectAllWhenLoaded = false
+                    applyChangesIfRunning()
+                }
                 appList.adapter = AppsAdapter(entries)
                 updateSelectAllButton()
             }
