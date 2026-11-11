@@ -249,12 +249,21 @@ class FirewallVpnService : VpnService() {
         } else {
             "Zaznaczone aplikacje nie mają internetu."
         }
+        val accentColor = when (prefs.getString("accent", "purple")) {
+            "blue" -> android.graphics.Color.rgb(45, 130, 255)
+            "green" -> android.graphics.Color.rgb(35, 190, 125)
+            "red" -> android.graphics.Color.rgb(235, 65, 75)
+            "pink" -> android.graphics.Color.rgb(245, 75, 165)
+            "orange" -> android.graphics.Color.rgb(245, 135, 45)
+            else -> android.graphics.Color.rgb(174, 42, 255)
+        }
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("FireApp działa")
                 .setContentText(message)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(openApp)
+                .setColor(accentColor)
                 .setOngoing(true)
                 .build()
         } else {
