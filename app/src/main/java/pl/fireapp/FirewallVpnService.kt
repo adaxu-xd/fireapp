@@ -106,8 +106,9 @@ class FirewallVpnService : VpnService() {
 
     @Synchronized
     private fun startFirewall(packages: List<String>, mode: String) {
-        stopTunnel()
+        // Keep the current tunnel alive until Android successfully establishes its replacement.
         if (mode != MODE_ALLOW_SELECTED && packages.isEmpty()) {
+            stopTunnel()
             prefs.edit().putBoolean("active", false).apply()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -152,6 +153,10 @@ class FirewallVpnService : VpnService() {
                 return
             }
 
+            val previousTun = tun
+            tunnelGeneration++
+            running.set(false)
+            try { previousTun?.close() } catch (_: Exception) { }
             tun = descriptor
             prefs.edit().putBoolean("active", true).apply()
             running.set(true)
@@ -179,6 +184,7 @@ class FirewallVpnService : VpnService() {
                 start()
             }
         } catch (_: Exception) {
+            // If replacement fails, leave the previous established tunnel untouched.
             scheduleRecovery(tunnelGeneration)
         }
     }
