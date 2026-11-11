@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import java.io.FileInputStream
 import java.util.concurrent.atomic.AtomicBoolean
@@ -24,12 +26,16 @@ class FirewallVpnService : VpnService() {
         const val MODE_ALLOW_SELECTED = "allow_selected"
         private const val CHANNEL_ID = "fireapp_firewall"
         private const val NOTIFICATION_ID = 7301
+        private const val RECOVERY_DELAY_MS = 2500L
     }
 
     private val prefs by lazy { getSharedPreferences("fireapp", MODE_PRIVATE) }
+    private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var tun: ParcelFileDescriptor? = null
+    @Volatile private var tunnelGeneration = 0
     private var reader: Thread? = null
     private val running = AtomicBoolean(false)
+    private var recoveryScheduled = false
     private var packageReceiverRegistered = false
 
     private val packageReceiver = object : BroadcastReceiver() {
@@ -45,8 +51,6 @@ class FirewallVpnService : VpnService() {
                     ?: mutableSetOf()
                 if (selected.add(addedPackage)) {
                     prefs.edit().putStringSet("selected_apps", selected).apply()
-                    // In allow-list mode, a newly installed app is immediately added
-                    // to the apps that bypass the VPN and therefore keep internet access.
                     startFirewall(selected.toList(), currentMode)
                 }
             }
@@ -70,6 +74,8 @@ class FirewallVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             prefs.edit().putBoolean("active", false).apply()
+            recoveryScheduled = false
+            mainHandler.removeCallbacksAndMessages(null)
             stopTunnel()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -98,6 +104,7 @@ class FirewallVpnService : VpnService() {
         return START_STICKY
     }
 
+    @Synchronized
     private fun startFirewall(packages: List<String>, mode: String) {
         stopTunnel()
         if (mode != MODE_ALLOW_SELECTED && packages.isEmpty()) {
@@ -122,15 +129,13 @@ class FirewallVpnService : VpnService() {
                 if (pkg == packageName) continue
                 try {
                     if (mode == MODE_ALLOW_SELECTED) {
-                        // Selected apps bypass the VPN and keep normal network access.
                         builder.addDisallowedApplication(pkg)
                     } else {
-                        // Only selected apps enter the VPN; their packets are discarded.
                         builder.addAllowedApplication(pkg)
                     }
                     validPackages++
                 } catch (_: Exception) {
-                    // Skip an app that was uninstalled after it was selected.
+                    // The app may have been uninstalled after selection.
                 }
             }
 
@@ -143,42 +148,57 @@ class FirewallVpnService : VpnService() {
 
             val descriptor = builder.establish()
             if (descriptor == null) {
-                prefs.edit().putBoolean("active", false).apply()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                scheduleRecovery(tunnelGeneration)
                 return
             }
 
             tun = descriptor
             prefs.edit().putBoolean("active", true).apply()
             running.set(true)
+            val thisGeneration = tunnelGeneration
             reader = Thread({
                 val packetBuffer = ByteArray(32767)
                 try {
                     FileInputStream(descriptor.fileDescriptor).use { input ->
-                        while (running.get()) {
-                            // Traffic routed into this local VPN is intentionally dropped.
+                        while (running.get() && thisGeneration == tunnelGeneration) {
                             if (input.read(packetBuffer) < 0) break
                         }
                     }
                 } catch (_: Exception) {
-                    // Expected when the VPN descriptor is closed.
+                    // The descriptor can close when Android revokes or replaces the VPN.
                 } finally {
-                    running.set(false)
+                    if (thisGeneration == tunnelGeneration) {
+                        running.set(false)
+                        if (prefs.getBoolean("active", false)) {
+                            scheduleRecovery(thisGeneration)
+                        }
+                    }
                 }
             }, "FireApp-PacketDropper").apply {
                 isDaemon = true
                 start()
             }
         } catch (_: Exception) {
-            prefs.edit().putBoolean("active", false).apply()
-            stopTunnel()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            scheduleRecovery(tunnelGeneration)
         }
     }
 
+    @Synchronized
+    private fun scheduleRecovery(expectedGeneration: Int) {
+        if (recoveryScheduled || !prefs.getBoolean("active", false)) return
+        recoveryScheduled = true
+        mainHandler.postDelayed({
+            recoveryScheduled = false
+            if (!prefs.getBoolean("active", false) || expectedGeneration != tunnelGeneration) return@postDelayed
+            val packages = prefs.getStringSet("selected_apps", emptySet())?.toList() ?: emptyList()
+            val mode = prefs.getString("mode", MODE_BLOCK_SELECTED) ?: MODE_BLOCK_SELECTED
+            startFirewall(packages, mode)
+        }, RECOVERY_DELAY_MS)
+    }
+
+    @Synchronized
     private fun stopTunnel() {
+        tunnelGeneration++
         running.set(false)
         try { tun?.close() } catch (_: Exception) { }
         tun = null
@@ -187,6 +207,8 @@ class FirewallVpnService : VpnService() {
 
     override fun onRevoke() {
         prefs.edit().putBoolean("active", false).apply()
+        recoveryScheduled = false
+        mainHandler.removeCallbacksAndMessages(null)
         stopTunnel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -194,6 +216,8 @@ class FirewallVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        recoveryScheduled = false
+        mainHandler.removeCallbacksAndMessages(null)
         if (packageReceiverRegistered) {
             try { unregisterReceiver(packageReceiver) } catch (_: Exception) { }
             packageReceiverRegistered = false
