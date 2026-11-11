@@ -24,6 +24,8 @@ class MainActivity : Activity() {
     private val selected = linkedSetOf<String>()
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
+    private lateinit var statusSub: TextView
+    private lateinit var toggleButton: TextView
     private lateinit var appList: ListView
     private lateinit var appEmpty: TextView
     private val appLoader = Executors.newSingleThreadExecutor()
@@ -88,8 +90,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         selected.addAll(prefs.getStringSet("selected_apps",
             prefs.getStringSet("blocked_apps", emptySet()) ?: emptySet()) ?: emptySet())
-        mode = prefs.getString("mode", FirewallVpnService.MODE_BLOCK_SELECTED)
-            ?: FirewallVpnService.MODE_BLOCK_SELECTED
+        mode = FirewallVpnService.MODE_ALLOW_SELECTED
+        prefs.edit().putString("mode", mode).apply()
         buildShell()
         showPage("home")
         autoStartFirewall()
@@ -221,7 +223,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(16), dp(12), dp(6))
         }
-        val statusSub = label("", 12f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(8), 0, dp(8), dp(15)) }
+        statusSub = label("", 12f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(8), 0, dp(8), dp(15)) }
         val statusCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = card(0xFF100D18.toInt(), 0xFF512477.toInt(), 20)
@@ -230,13 +232,11 @@ class MainActivity : Activity() {
         body.addView(statusCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         updateStatus(statusSub)
 
-        body.addView(shellButton("■   STOP", { disableFirewall() }, true),
-            LinearLayout.LayoutParams(-1, dp(56)).apply { bottomMargin = dp(18) })
-        body.addView(label("Tryb działania:", 14f, lightPurple, true).apply { setPadding(dp(4), 0, 0, dp(8)) })
-        body.addView(modeCard("◉", "Blokuj internet wybranym aplikacjom",
-            "Zaznaczone aplikacje nie mają internetu.", FirewallVpnService.MODE_BLOCK_SELECTED).also { animateEntrance(it, 80) })
-        body.addView(modeCard("⌁", "Dawaj internet tylko wybranym aplikacjom",
-            "Tylko zaznaczone aplikacje mają internet.", FirewallVpnService.MODE_ALLOW_SELECTED).also { animateEntrance(it, 140) })
+        toggleButton = shellButton(if (prefs.getBoolean("active", false)) "■   STOP" else "▶   START",
+            { toggleFirewall() }, true)
+        body.addView(toggleButton, LinearLayout.LayoutParams(-1, dp(56)).apply { bottomMargin = dp(18) })
+        body.addView(label("Zaznacz tylko aplikacje, które mają mieć internet.", 14f, lightPurple, true)
+            .apply { setPadding(dp(4), 0, 0, dp(8)) })
         body.addView(shellButton("▦   Wybierz aplikacje", { showPage("apps") }),
             LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(12) })
         content.addView(scroll)
@@ -271,20 +271,34 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus(sub: TextView? = null) {
-        val active = prefs.getBoolean("active", false)
+        val active = prefs.getBoolean("active", false) || startRequested
         status.text = if (active) "●  Zapora działa" else "○  Zapora zatrzymana"
-        sub?.text = if (active) {
-            if (mode == FirewallVpnService.MODE_ALLOW_SELECTED) "Internet mają tylko zaznaczone aplikacje."
-            else "Internet zablokowany dla wybranych aplikacji."
-        } else "Wybierz aplikacje i uruchom ochronę."
+        sub?.text = if (active) "Internet mają tylko zaznaczone aplikacje." else "Zaznacz aplikacje i naciśnij START."
+        if (::toggleButton.isInitialized) toggleButton.text = if (active) "■   STOP" else "▶   START"
+    }
+
+    private fun refreshHomeControls() {
+        if (currentPage == "home" && ::status.isInitialized) updateStatus(if (::statusSub.isInitialized) statusSub else null)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshHomeControls()
+    }
+
+    private fun toggleFirewall() {
+        if (prefs.getBoolean("active", false) || startRequested) disableFirewall()
+        else {
+            manuallyStopped = false
+            requestPermissionAndStart()
+            refreshHomeControls()
+        }
     }
 
     private fun buildAppsPage() {
         val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         top.addView(label("Aplikacje", 27f, Color.WHITE, true).apply { setPadding(dp(4), dp(8), 0, dp(10)) })
-        top.addView(label(if (mode == FirewallVpnService.MODE_ALLOW_SELECTED)
-            "Nowe aplikacje automatycznie dostają internet."
-            else "Zaznacz aplikacje, którym chcesz zablokować internet.",
+        top.addView(label("Zaznacz aplikacje, które mają mieć internet. Wszystkie pozostałe będą zablokowane.",
             13f, lightPurple).apply {
                 setPadding(dp(14), dp(14), dp(14), dp(14))
                 background = card(0xFF21102F.toInt(), 0xFF63308C.toInt(), 16)
@@ -347,24 +361,31 @@ class MainActivity : Activity() {
         box.addView(label("Informacje", 27f, Color.WHITE, true).apply { setPadding(dp(4), dp(8), 0, dp(18)) })
         listOf(
             "FireApp kontroluje dostęp aplikacji do internetu przez lokalne połączenie VPN.",
-            "Zmiany zaznaczenia i trybu są przekazywane do usługi na bieżąco.",
-            "Android lub producent telefonu może zatrzymać usługę. Nie ma gwarancji nieprzerwanej pracy w każdych warunkach.",
-            "Aby zatrzymać zaporę, użyj przycisku STOP na stronie głównej."
+            "Zaznaczone aplikacje mają internet, a pozostałe są blokowane.",
+            "Zmiany zaznaczenia są przekazywane do usługi na bieżąco.",
+            "Android lub producent telefonu może zatrzymać usługę. Nie ma gwarancji nieprzerwanej pracy w każdych warunkach."
         ).forEach { message ->
             box.addView(label(message, 14f, lightPurple).apply {
                 setPadding(dp(14), dp(14), dp(14), dp(14))
                 background = card(0xFF100D18.toInt(), 0xFF43215D.toInt(), 16)
             }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
+        val creator = label("by: Adixu_YT", 42f, lightPurple, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(34), dp(8), dp(34))
+            letterSpacing = 0.04f
+            setShadowLayer(dp(18).toFloat(), 0f, 0f, purple)
+        }
+        box.addView(creator, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(24)
+            bottomMargin = dp(18)
+        })
         content.addView(box)
     }
 
     private fun autoStartFirewall() {
-        if (prefs.getBoolean("active", false)) { updateStatus(); return }
-        if (mode == FirewallVpnService.MODE_BLOCK_SELECTED && selected.isEmpty()) {
-            updateStatus(); return
-        }
-        requestPermissionAndStart()
+        mode = FirewallVpnService.MODE_ALLOW_SELECTED
+        updateStatus(if (::statusSub.isInitialized) statusSub else null)
     }
 
     private fun requestPermissionAndStart() {
@@ -383,7 +404,11 @@ class MainActivity : Activity() {
         if (requestCode == vpnRequestCode) {
             permissionRequestInProgress = false
             if (resultCode == RESULT_OK) startFirewall()
-            else if (::status.isInitialized) status.text = "Nie przyznano zgody VPN."
+            else {
+                startRequested = false
+                if (::status.isInitialized) status.text = "Nie przyznano zgody VPN."
+                refreshHomeControls()
+            }
         }
     }
 
@@ -400,23 +425,26 @@ class MainActivity : Activity() {
             .putStringArrayListExtra(FirewallVpnService.EXTRA_PACKAGES, ArrayList(selected))
             .putExtra(FirewallVpnService.EXTRA_MODE, mode)
         try {
-            startForegroundService(serviceIntent); startRequested = true
+            startRequested = true
+            startForegroundService(serviceIntent)
+            refreshHomeControls()
             if (::status.isInitialized) status.text = "Zapora uruchamia się…"
         } catch (e: Exception) {
-            if (::status.isInitialized) status.text = "Błąd uruchamiania: ${e.localizedMessage ?: "nieznany błąd"}"
+            startRequested = false
+            if (::status.isInitialized) status.text = "Błąd uruchamiania: " + (e.localizedMessage ?: "nieznany błąd")
+            refreshHomeControls()
         }
     }
 
     private fun applyChangesIfRunning() {
+        mode = FirewallVpnService.MODE_ALLOW_SELECTED
         if (prefs.getBoolean("active", false) || startRequested) startFirewall()
-        else if (!manuallyStopped && (mode == FirewallVpnService.MODE_ALLOW_SELECTED || selected.isNotEmpty()))
-            requestPermissionAndStart()
     }
 
     private fun disableFirewall() {
         startRequested = false; manuallyStopped = true
         prefs.edit().putBoolean("active", false).apply()
         try { startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_STOP)) } catch (_: Exception) {}
-        updateStatus()
+        updateStatus(if (::statusSub.isInitialized) statusSub else null)
     }
 }
