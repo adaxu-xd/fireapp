@@ -44,10 +44,10 @@ class MainActivity : Activity() {
                 row = LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                     setPadding(dp(10), dp(8), dp(10), dp(8))
-                    background = card(0xFF100D18.toInt(), 0xFF30213D.toInt(), 12)
+                    background = card(panel, borderColor, 12)
                 }
                 icon = ImageView(this@MainActivity)
-                name = label("", 14f, Color.WHITE, true).apply { setPadding(dp(12), 0, 0, 0) }
+                name = label("", 14f, primaryText, true).apply { setPadding(dp(12), 0, 0, 0) }
                 check = CheckBox(this@MainActivity).apply {
                     buttonTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(purple, 0xFF8C6AA5.toInt()))
                 }
@@ -80,11 +80,47 @@ class MainActivity : Activity() {
     private var manuallyStopped = false
     private var currentPage = "home"
 
-    private val bg = Color.rgb(5, 4, 11)
-    private val panel = Color.rgb(17, 12, 27)
-    private val purple = Color.rgb(174, 42, 255)
-    private val lightPurple = Color.rgb(218, 157, 255)
-    private val muted = Color.rgb(174, 157, 194)
+    private val theme get() = prefs.getString("theme", "violet") ?: "violet"
+    private val accentName get() = prefs.getString("accent", "purple") ?: "purple"
+    private val purple get() = when (accentName) {
+        "blue" -> Color.rgb(45, 130, 255)
+        "green" -> Color.rgb(35, 190, 125)
+        "red" -> Color.rgb(235, 65, 75)
+        "pink" -> Color.rgb(245, 75, 165)
+        "orange" -> Color.rgb(245, 135, 45)
+        else -> Color.rgb(174, 42, 255)
+    }
+    private val lightPurple get() = blend(Color.WHITE, purple, 0.78f)
+    private val bg get() = when (theme) {
+        "light" -> Color.rgb(244, 241, 249)
+        "amoled" -> Color.BLACK
+        "ocean" -> Color.rgb(5, 15, 30)
+        "forest" -> Color.rgb(7, 22, 17)
+        "sunset" -> Color.rgb(29, 13, 19)
+        else -> Color.rgb(5, 4, 11)
+    }
+    private val panel get() = when (theme) {
+        "light" -> Color.rgb(255, 255, 255)
+        "amoled" -> Color.rgb(10, 10, 12)
+        "ocean" -> Color.rgb(12, 26, 46)
+        "forest" -> Color.rgb(15, 35, 27)
+        "sunset" -> Color.rgb(43, 22, 29)
+        else -> Color.rgb(17, 12, 27)
+    }
+    private val primaryText get() = if (theme == "light") Color.rgb(31, 24, 40) else Color.WHITE
+    private val muted get() = if (theme == "light") Color.rgb(104, 91, 119) else blend(Color.WHITE, purple, 0.52f)
+    private val navBarColor get() = if (theme == "light") Color.rgb(232, 225, 241) else panel
+    private val selectedPanelColor get() = blend(panel, purple, 0.20f)
+    private val borderColor get() = blend(panel, purple, 0.38f)
+
+    private fun blend(base: Int, tint: Int, amount: Float): Int {
+        val a = amount.coerceIn(0f, 1f)
+        return Color.rgb(
+            (Color.red(base) * (1f - a) + Color.red(tint) * a).toInt(),
+            (Color.green(base) * (1f - a) + Color.green(tint) * a).toInt(),
+            (Color.blue(base) * (1f - a) + Color.blue(tint) * a).toInt()
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,17 +201,17 @@ class MainActivity : Activity() {
         titleBox.addView(label("FireApp", 29f, Color.WHITE, true))
         titleBox.addView(label("Zapora Internetu", 13f, lightPurple))
         header.addView(titleBox, LinearLayout.LayoutParams(0, -2, 1f))
-        header.addView(shellButton("⚙", { showPage("info") }), LinearLayout.LayoutParams(dp(48), dp(48)))
+        header.addView(shellButton("⚙", { showPage("settings") }), LinearLayout.LayoutParams(dp(48), dp(48)))
         root.addView(header)
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = card(0xFF0D0A14.toInt(), 0xFF30213D.toInt(), 22)
+            background = card(navBarColor, borderColor, 22)
             setPadding(dp(4), dp(8), dp(4), dp(8))
         }
-        listOf(Triple("⌂", "Strona", "home"), Triple("▦", "Aplikacje", "apps"), Triple("ⓘ", "Informacje", "info")).forEach { item ->
+        listOf(Triple("⌂", "Strona", "home"), Triple("▦", "Aplikacje", "apps"), Triple("⚙", "Ustawienia", "settings"), Triple("ⓘ", "Info", "info")).forEach { item ->
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(0, dp(3), 0, dp(3))
@@ -194,6 +230,7 @@ class MainActivity : Activity() {
         when (page) {
             "apps" -> buildAppsPage()
             "info" -> buildInfoPage()
+            "settings" -> buildSettingsPage()
             else -> buildHomePage()
         }
         animatePage()
@@ -226,7 +263,7 @@ class MainActivity : Activity() {
         statusSub = label("", 12f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(8), 0, dp(8), dp(15)) }
         val statusCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = card(0xFF100D18.toInt(), 0xFF512477.toInt(), 20)
+            background = card(panel, borderColor, 20)
             addView(status); addView(statusSub)
         }
         body.addView(statusCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
@@ -247,8 +284,8 @@ class MainActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            background = card(if (chosen) 0xFF21102F.toInt() else 0xFF100D18.toInt(),
-                if (chosen) purple else 0xFF30213D.toInt(), 18)
+            background = card(if (chosen) selectedPanelColor else panel,
+                if (chosen) purple else borderColor, 18)
             setOnClickListener {
                 animatePress(this) {
                     mode = value
@@ -301,7 +338,7 @@ class MainActivity : Activity() {
         top.addView(label("Zaznacz aplikacje, które mają mieć internet. Wszystkie pozostałe będą zablokowane.",
             13f, lightPurple).apply {
                 setPadding(dp(14), dp(14), dp(14), dp(14))
-                background = card(0xFF21102F.toInt(), 0xFF63308C.toInt(), 16)
+                background = card(selectedPanelColor, borderColor, 16)
             })
         top.addView(label("Zainstalowane aplikacje", 14f, muted, true).apply { setPadding(dp(4), dp(14), 0, dp(8)) })
         appList = ListView(this).apply {
@@ -356,6 +393,52 @@ class MainActivity : Activity() {
         }
     }
 
+
+    private fun buildSettingsPage() {
+        val scroll = ScrollView(this).apply { isFillViewport = true; isSmoothScrollingEnabled = true }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, dp(18)) }
+        scroll.addView(box)
+        box.addView(label("Ustawienia", 27f, primaryText, true).apply { setPadding(dp(4), 0, 0, dp(6)) })
+        box.addView(label("Motyw aplikacji", 16f, lightPurple, true).apply { setPadding(dp(4), dp(16), 0, dp(8)) })
+        val themes = listOf(
+            "violet" to "Fioletowa noc",
+            "light" to "Jasny",
+            "amoled" to "AMOLED",
+            "ocean" to "Ocean",
+            "forest" to "Las",
+            "sunset" to "Zachód słońca"
+        )
+        themes.forEach { (key, title) ->
+            box.addView(shellButton((if (theme == key) "✓   " else "○   ") + title, {
+                prefs.edit().putString("theme", key).apply()
+                rebuildAppearance()
+            }, theme == key), LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(7) })
+        }
+        box.addView(label("Kolor akcentu", 16f, lightPurple, true).apply { setPadding(dp(4), dp(18), 0, dp(8)) })
+        val accents = listOf(
+            "purple" to "Fioletowy",
+            "blue" to "Niebieski",
+            "green" to "Zielony",
+            "red" to "Czerwony",
+            "pink" to "Różowy",
+            "orange" to "Pomarańczowy"
+        )
+        accents.forEach { (key, title) ->
+            box.addView(shellButton((if (accentName == key) "✓   " else "○   ") + title, {
+                prefs.edit().putString("accent", key).apply()
+                rebuildAppearance()
+            }, accentName == key), LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(7) })
+        }
+        box.addView(label("Wygląd zmienia się od razu i zostaje zapamiętany.", 12f, muted)
+            .apply { setPadding(dp(4), dp(12), 0, 0) })
+        content.addView(scroll)
+    }
+
+    private fun rebuildAppearance() {
+        buildShell()
+        showPage("settings")
+    }
+
     private fun buildInfoPage() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         box.addView(label("Informacje", 27f, Color.WHITE, true).apply { setPadding(dp(4), dp(8), 0, dp(18)) })
@@ -367,7 +450,7 @@ class MainActivity : Activity() {
         ).forEach { message ->
             box.addView(label(message, 14f, lightPurple).apply {
                 setPadding(dp(14), dp(14), dp(14), dp(14))
-                background = card(0xFF100D18.toInt(), 0xFF43215D.toInt(), 16)
+                background = card(panel, borderColor, 16)
             }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
         val creator = label("by: Adixu_YT", 42f, lightPurple, true).apply {
