@@ -12,6 +12,8 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.*
 
 class MainActivity : Activity() {
@@ -45,6 +47,32 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun animatePress(view: View, action: () -> Unit) {
+        view.animate().cancel()
+        view.animate().scaleX(0.965f).scaleY(0.965f).alpha(0.88f)
+            .setDuration(85).setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                view.animate().scaleX(1f).scaleY(1f).alpha(1f)
+                    .setDuration(230).setInterpolator(OvershootInterpolator(1.25f))
+                    .withEndAction { action() }.start()
+            }.start()
+    }
+
+    private fun animateEntrance(view: View, delay: Long = 0L) {
+        view.alpha = 0f
+        view.translationY = dp(18).toFloat()
+        view.animate().alpha(1f).translationY(0f)
+            .setStartDelay(delay).setDuration(360)
+            .setInterpolator(DecelerateInterpolator()).start()
+    }
+
+    private fun animatePage() {
+        content.alpha = 0f
+        content.translationX = dp(12).toFloat()
+        content.animate().alpha(1f).translationX(0f)
+            .setDuration(260).setInterpolator(DecelerateInterpolator()).start()
+    }
     private fun card(color: Int = panel, stroke: Int = 0xFF38204F.toInt(), radius: Int = 20): GradientDrawable =
         GradientDrawable().apply {
             setColor(color); cornerRadius = dp(radius).toFloat()
@@ -63,7 +91,7 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(13), dp(14), dp(13))
             background = card(if (accent) 0xFF6513A5.toInt() else panel,
                 if (accent) purple else 0xFF593078.toInt(), 16)
-            setOnClickListener { onClick() }
+            setOnClickListener { animatePress(this, onClick) }
         }
 
     private fun buildShell() {
@@ -100,7 +128,7 @@ class MainActivity : Activity() {
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(0, dp(3), 0, dp(3))
-                setOnClickListener { showPage(item.third) }
+                setOnClickListener { animatePress(this) { showPage(item.third) } }
             }
             cell.addView(label(item.first, 23f, lightPurple, true).apply { gravity = Gravity.CENTER })
             cell.addView(label(item.second, 11f, muted).apply { gravity = Gravity.CENTER })
@@ -117,10 +145,16 @@ class MainActivity : Activity() {
             "info" -> buildInfoPage()
             else -> buildHomePage()
         }
+        animatePage()
     }
 
     private fun buildHomePage() {
-        val scroll = ScrollView(this)
+        val scroll = ScrollView(this).apply {
+            isSmoothScrollingEnabled = true
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            scrollBarFadeDuration = 350
+        }
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(2), 0, dp(12)) }
         scroll.addView(body)
         val hero = LinearLayout(this).apply {
@@ -151,9 +185,9 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, dp(56)).apply { bottomMargin = dp(18) })
         body.addView(label("Tryb działania:", 14f, lightPurple, true).apply { setPadding(dp(4), 0, 0, dp(8)) })
         body.addView(modeCard("◉", "Blokuj internet wybranym aplikacjom",
-            "Zaznaczone aplikacje nie mają internetu.", FirewallVpnService.MODE_BLOCK_SELECTED))
+            "Zaznaczone aplikacje nie mają internetu.", FirewallVpnService.MODE_BLOCK_SELECTED).also { animateEntrance(it, 80) })
         body.addView(modeCard("⌁", "Dawaj internet tylko wybranym aplikacjom",
-            "Tylko zaznaczone aplikacje mają internet.", FirewallVpnService.MODE_ALLOW_SELECTED))
+            "Tylko zaznaczone aplikacje mają internet.", FirewallVpnService.MODE_ALLOW_SELECTED).also { animateEntrance(it, 140) })
         body.addView(shellButton("▦   Wybierz aplikacje", { showPage("apps") }),
             LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(12) })
         content.addView(scroll)
@@ -167,10 +201,12 @@ class MainActivity : Activity() {
             background = card(if (chosen) 0xFF21102F.toInt() else 0xFF100D18.toInt(),
                 if (chosen) purple else 0xFF30213D.toInt(), 18)
             setOnClickListener {
-                mode = value
-                prefs.edit().putString("mode", mode).apply()
-                showPage("home")
-                applyChangesIfRunning()
+                animatePress(this) {
+                    mode = value
+                    prefs.edit().putString("mode", mode).apply()
+                    showPage("home")
+                    applyChangesIfRunning()
+                }
             }
         }
         box.addView(label(symbol, 28f, if (chosen) purple else 0xFF26A8FF.toInt(), true),
@@ -205,7 +241,11 @@ class MainActivity : Activity() {
                 background = card(0xFF21102F.toInt(), 0xFF63308C.toInt(), 16)
             })
         top.addView(label("Zainstalowane aplikacje", 14f, muted, true).apply { setPadding(dp(4), dp(14), 0, dp(8)) })
-        val scroll = ScrollView(this)
+        val scroll = ScrollView(this).apply {
+            isSmoothScrollingEnabled = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            scrollBarFadeDuration = 350
+        }
         appList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(appList)
         top.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -226,6 +266,8 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(10), dp(8), dp(10), dp(8))
                 background = card(0xFF100D18.toInt(), 0xFF30213D.toInt(), 12)
+                isClickable = true
+                isFocusable = true
             }
             val appIcon = ImageView(this).apply {
                 try { setImageDrawable(app.loadIcon(packageManager)) } catch (_: Exception) {}
@@ -243,10 +285,14 @@ class MainActivity : Activity() {
                     if (checked) selected.add(app.packageName) else selected.remove(app.packageName)
                     prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
                     applyChangesIfRunning()
+                    row.animate().scaleX(1.015f).scaleY(1.015f).setDuration(100)
+                        .withEndAction { row.animate().scaleX(1f).scaleY(1f).setDuration(140).start() }.start()
                 }
             }
             row.addView(check)
+            row.setOnClickListener { animatePress(row) { check.isChecked = !check.isChecked } }
             appList.addView(row, LinearLayout.LayoutParams(-1, dp(60)).apply { bottomMargin = dp(3) })
+            animateEntrance(row, appList.childCount.coerceAtMost(10) * 24L)
         }
         if (apps.isEmpty()) appList.addView(label("Nie znaleziono aplikacji.", 14f, muted))
     }
