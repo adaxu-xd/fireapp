@@ -141,6 +141,7 @@ class FirewallVpnService : VpnService() {
             }
 
             if (mode != MODE_ALLOW_SELECTED && validPackages == 0) {
+                stopTunnel()
                 prefs.edit().putBoolean("active", false).apply()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
