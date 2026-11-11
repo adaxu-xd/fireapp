@@ -7,9 +7,115 @@
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
     <application android:allowBackup="false" android:icon="@drawable/fireapp_icon" android:label="FireApp" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true" />
+        <activity-alias android:name=".Launcher_violet_purple" android:targetActivity=".MainActivity" android:enabled="true" android:exported="true" android:icon="@drawable/fireapp_icon_violet_purple" android:label="FireApp">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_violet_blue" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_violet_blue" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_violet_green" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_violet_green" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_violet_red" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_violet_red" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_violet_pink" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_violet_pink" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_violet_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_violet_orange" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_light_purple" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_light_purple" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_light_blue" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_light_blue" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_light_green" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_light_green" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_light_red" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_light_red" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_light_pink" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_light_pink" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_light_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_light_orange" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_amoled_purple" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_amoled_purple" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_amoled_blue" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_amoled_blue" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_amoled_green" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_amoled_green" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_amoled_red" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_amoled_red" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_amoled_pink" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_amoled_pink" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_amoled_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_amoled_orange" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_ocean_purple" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_ocean_purple" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_ocean_blue" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_ocean_blue" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_ocean_green" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_ocean_green" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_ocean_red" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_ocean_red" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_ocean_pink" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_ocean_pink" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_ocean_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_ocean_orange" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_forest_purple" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_forest_purple" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_forest_blue" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_forest_blue" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_forest_green" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_forest_green" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_forest_red" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_forest_red" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_forest_pink" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_forest_pink" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_forest_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_forest_orange" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_sunset_purple" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_purple" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_sunset_blue" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_blue" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_sunset_green" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_green" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_sunset_red" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_red" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_sunset_pink" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_pink" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_sunset_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_orange" android:label="FireApp">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
         <service android:name=".FirewallVpnService" android:permission="android.permission.BIND_VPN_SERVICE" android:exported="true" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Local per-app network firewall using Android VpnService" />
             <intent-filter><action android:name="android.net.VpnService" /></intent-filter>

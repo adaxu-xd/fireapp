@@ -2,6 +2,7 @@ package pl.fireapp
 
 import android.app.Activity
 import android.content.Intent
+import android.content.ComponentName
 import android.content.pm.ApplicationInfo
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -130,6 +131,7 @@ class MainActivity : Activity() {
         prefs.edit().putString("mode", mode).apply()
         buildShell()
         showPage("home")
+        switchLauncherIcon()
         autoStartFirewall()
     }
 
@@ -193,7 +195,7 @@ class MainActivity : Activity() {
             setPadding(dp(2), dp(8), dp(2), dp(14))
         }
         val icon = ImageView(this).apply {
-            setImageResource(R.drawable.fireapp_icon)
+            setImageResource(appIconResource())
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
         header.addView(icon, LinearLayout.LayoutParams(dp(58), dp(58)))
@@ -250,7 +252,7 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(3), dp(8), dp(12))
         }
         val heroIcon = ImageView(this).apply {
-            setImageResource(R.drawable.fireapp_icon); scaleType = ImageView.ScaleType.FIT_CENTER
+            setImageResource(appIconResource()); scaleType = ImageView.ScaleType.FIT_CENTER
         }
         hero.addView(heroIcon, LinearLayout.LayoutParams(dp(210), dp(190)))
         hero.addView(label("Twoja sieć. Twoje zasady.", 16f, lightPurple, true))
@@ -435,8 +437,41 @@ class MainActivity : Activity() {
     }
 
     private fun rebuildAppearance() {
+        switchLauncherIcon()
         buildShell()
         showPage("settings")
+    }
+
+    private fun switchLauncherIcon() {
+        val selectedAlias = "pl.fireapp.Launcher_${theme}_${accentName}"
+        val aliases = mutableListOf<String>()
+        listOf("violet", "light", "amoled", "ocean", "forest", "sunset").forEach { t ->
+            listOf("purple", "blue", "green", "red", "pink", "orange").forEach { a ->
+                aliases.add("pl.fireapp.Launcher_${t}_${a}")
+            }
+        }
+        try {
+            packageManager.setComponentEnabledSetting(
+                ComponentName(this, selectedAlias),
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                android.content.pm.PackageManager.DONT_KILL_APP
+            )
+            aliases.filter { it != selectedAlias }.forEach { alias ->
+                packageManager.setComponentEnabledSetting(
+                    ComponentName(this, alias),
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+            }
+        } catch (_: Exception) {
+            // The launcher may take a moment to refresh its cached icon.
+        }
+    }
+
+    private fun appIconResource(): Int {
+        val name = "fireapp_icon_${theme}_${accentName}"
+        return resources.getIdentifier(name, "drawable", packageName)
+            .takeIf { it != 0 } ?: R.drawable.fireapp_icon
     }
 
     private fun buildInfoPage() {
