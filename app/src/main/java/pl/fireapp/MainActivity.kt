@@ -15,13 +15,61 @@ import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.*
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("fireapp", MODE_PRIVATE) }
     private val selected = linkedSetOf<String>()
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
-    private lateinit var appList: LinearLayout
+    private lateinit var appList: ListView
+    private val appLoader = Executors.newSingleThreadExecutor()
+    private data class AppEntry(val packageName: String, val name: String, val icon: android.graphics.drawable.Drawable)
+    private inner class AppsAdapter(private val entries: List<AppEntry>) : BaseAdapter() {
+        override fun getCount() = entries.size
+        override fun getItem(position: Int) = entries[position]
+        override fun getItemId(position: Int) = position.toLong()
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val entry = getItem(position)
+            val row: LinearLayout
+            val icon: ImageView
+            val name: TextView
+            val check: CheckBox
+            if (convertView == null) {
+                row = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    background = card(0xFF100D18.toInt(), 0xFF30213D.toInt(), 12)
+                }
+                icon = ImageView(this@MainActivity)
+                name = label("", 14f, Color.WHITE, true).apply { setPadding(dp(12), 0, 0, 0) }
+                check = CheckBox(this@MainActivity).apply {
+                    buttonTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(purple, 0xFF8C6AA5.toInt()))
+                }
+                row.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)))
+                row.addView(name, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(check)
+                row.tag = arrayOf(icon, name, check)
+            } else {
+                row = convertView as LinearLayout
+                val views = row.tag as Array<*>
+                icon = views[0] as ImageView; name = views[1] as TextView; check = views[2] as CheckBox
+            }
+            icon.setImageDrawable(entry.icon)
+            name.text = entry.name
+            check.setOnCheckedChangeListener(null)
+            check.isChecked = selected.contains(entry.packageName)
+            check.setOnCheckedChangeListener { _, checked ->
+                if (checked) selected.add(entry.packageName) else selected.remove(entry.packageName)
+                prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
+                applyChangesIfRunning()
+            }
+            row.setOnClickListener { check.isChecked = !check.isChecked }
+            return row
+        }
+    }
     private var mode = FirewallVpnService.MODE_BLOCK_SELECTED
     private val vpnRequestCode = 4102
     private var permissionRequestInProgress = false
@@ -241,60 +289,55 @@ class MainActivity : Activity() {
                 background = card(0xFF21102F.toInt(), 0xFF63308C.toInt(), 16)
             })
         top.addView(label("Zainstalowane aplikacje", 14f, muted, true).apply { setPadding(dp(4), dp(14), 0, dp(8)) })
-        val scroll = ScrollView(this).apply {
-            isSmoothScrollingEnabled = true
+        appList = ListView(this).apply {
+            divider = null
+            dividerHeight = dp(3)
+            cacheColorHint = Color.TRANSPARENT
+            isSmoothScrollbarEnabled = true
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            scrollBarFadeDuration = 350
+            setPadding(0, 0, 0, dp(4))
+            clipToPadding = false
         }
-        appList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(appList)
-        top.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        top.addView(appList, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(top)
         renderApps()
     }
 
     private fun renderApps() {
         if (!::appList.isInitialized) return
-        appList.removeAllViews()
-        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = packageManager.queryIntentActivities(launcherIntent, 0)
-            .map { it.activityInfo.applicationInfo }.distinctBy { it.packageName }
-            .filter { it.packageName != packageName }
-            .sortedBy { packageManager.getApplicationLabel(it).toString().lowercase() }
-        for (app in apps) {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(10), dp(8), dp(10), dp(8))
-                background = card(0xFF100D18.toInt(), 0xFF30213D.toInt(), 12)
-                isClickable = true
-                isFocusable = true
-            }
-            val appIcon = ImageView(this).apply {
-                try { setImageDrawable(app.loadIcon(packageManager)) } catch (_: Exception) {}
-            }
-            row.addView(appIcon, LinearLayout.LayoutParams(dp(42), dp(42)))
-            val name = packageManager.getApplicationLabel(app).toString()
-            row.addView(label(name, 14f, Color.WHITE, true).apply { setPadding(dp(12), 0, 0, 0) },
-                LinearLayout.LayoutParams(0, -2, 1f))
-            val check = CheckBox(this).apply {
-                buttonTintList = ColorStateList(
-                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(purple, 0xFF8C6AA5.toInt()))
-                isChecked = selected.contains(app.packageName)
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selected.add(app.packageName) else selected.remove(app.packageName)
-                    prefs.edit().putStringSet("selected_apps", selected.toSet()).apply()
-                    applyChangesIfRunning()
-                    row.animate().scaleX(1.015f).scaleY(1.015f).setDuration(100)
-                        .withEndAction { row.animate().scaleX(1f).scaleY(1f).setDuration(140).start() }.start()
+        appList.adapter = null
+        appList.setOnItemClickListener(null)
+        val loading = label("Wczytywanie aplikacji…", 14f, muted).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(28), 0, dp(28))
+        }
+        appList.addHeaderView(loading, null, false)
+        appLoader.execute {
+            val entries = try {
+                val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                packageManager.queryIntentActivities(launcherIntent, 0)
+                    .map { it.activityInfo.applicationInfo }
+                    .distinctBy { it.packageName }
+                    .filter { it.packageName != packageName }
+                    .mapNotNull { app ->
+                        try {
+                            AppEntry(app.packageName, packageManager.getApplicationLabel(app).toString(), app.loadIcon(packageManager))
+                        } catch (_: Exception) { null }
+                    }
+                    .sortedBy { it.name.lowercase() }
+            } catch (_: Exception) { emptyList() }
+            runOnUiThread {
+                if (currentPage != "apps" || !::appList.isInitialized) return@runOnUiThread
+                try { appList.removeHeaderView(loading) } catch (_: Exception) {}
+                appList.adapter = AppsAdapter(entries)
+                if (entries.isEmpty()) {
+                    val empty = label("Nie znaleziono aplikacji.", 14f, muted).apply {
+                        gravity = Gravity.CENTER; setPadding(0, dp(28), 0, dp(28))
+                    }
+                    appList.addHeaderView(empty, null, false)
                 }
             }
-            row.addView(check)
-            row.setOnClickListener { animatePress(row) { check.isChecked = !check.isChecked } }
-            appList.addView(row, LinearLayout.LayoutParams(-1, dp(60)).apply { bottomMargin = dp(3) })
-            animateEntrance(row, appList.childCount.coerceAtMost(10) * 24L)
         }
-        if (apps.isEmpty()) appList.addView(label("Nie znaleziono aplikacji.", 14f, muted))
     }
 
     private fun buildInfoPage() {
