@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
+import android.app.AlarmManager
 import java.io.FileInputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -20,6 +22,7 @@ class FirewallVpnService : VpnService() {
     companion object {
         const val ACTION_START = "pl.fireapp.START"
         const val ACTION_STOP = "pl.fireapp.STOP"
+        const val ACTION_CHECK = "pl.fireapp.CHECK"
         const val EXTRA_PACKAGES = "packages"
         const val EXTRA_MODE = "mode"
         const val MODE_BLOCK_SELECTED = "block_selected"
@@ -27,6 +30,7 @@ class FirewallVpnService : VpnService() {
         private const val CHANNEL_ID = "fireapp_firewall"
         private const val NOTIFICATION_ID = 7301
         private const val RECOVERY_DELAY_MS = 2500L
+        private const val WATCHDOG_INTERVAL_MS = 15 * 60 * 1000L
     }
 
     private val prefs by lazy { getSharedPreferences("fireapp", MODE_PRIVATE) }
@@ -74,6 +78,7 @@ class FirewallVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             prefs.edit().putBoolean("active", false).apply()
+            cancelWatchdog()
             recoveryScheduled = false
             mainHandler.removeCallbacksAndMessages(null)
             stopTunnel()
@@ -100,8 +105,39 @@ class FirewallVpnService : VpnService() {
         }
 
         startForeground(NOTIFICATION_ID, buildNotification(mode))
+        scheduleWatchdog()
+        if (intent?.action == ACTION_CHECK && tunnelIsHealthy()) return START_STICKY
         startFirewall(packages, mode)
         return START_STICKY
+    }
+
+    private fun tunnelIsHealthy(): Boolean {
+        val descriptor = tun
+        return prefs.getBoolean("active", false) &&
+            descriptor != null && !descriptor.isClosed &&
+            running.get() && reader?.isAlive == true
+    }
+
+    private fun watchdogPendingIntent(): PendingIntent {
+        val intent = Intent(this, FirewallWatchdogReceiver::class.java).setAction(ACTION_CHECK)
+        return PendingIntent.getBroadcast(this, 7302, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    private fun scheduleWatchdog() {
+        val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
+        val pendingIntent = watchdogPendingIntent()
+        val triggerAt = SystemClock.elapsedRealtime() + WATCHDOG_INTERVAL_MS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarm.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+        } else {
+            alarm.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+        }
+    }
+
+    private fun cancelWatchdog() {
+        val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
+        alarm.cancel(watchdogPendingIntent())
     }
 
     @Synchronized
@@ -223,6 +259,7 @@ class FirewallVpnService : VpnService() {
 
     override fun onRevoke() {
         prefs.edit().putBoolean("active", false).apply()
+        cancelWatchdog()
         recoveryScheduled = false
         mainHandler.removeCallbacksAndMessages(null)
         stopTunnel()
