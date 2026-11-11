@@ -126,6 +126,15 @@ class FirewallVpnService : VpnService() {
                 .addRoute("::", 0)
 
             var validPackages = 0
+            if (mode == MODE_ALLOW_SELECTED) {
+                // Firebase Cloud Messaging dostarcza powiadomienia push przez Google Play Services.
+                // Usługa musi ominąć tunel FireApp, aby powiadomienia zaznaczonych aplikacji docierały.
+                try {
+                    builder.addDisallowedApplication("com.google.android.gms")
+                } catch (_: Exception) {
+                    // Google Play Services może nie być dostępne na danym urządzeniu.
+                }
+            }
             for (pkg in packages.distinct()) {
                 if (pkg == packageName) continue
                 try {
