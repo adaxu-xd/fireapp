@@ -488,11 +488,28 @@ class MainActivity : Activity() {
                 background = card(panel, borderColor, 16)
             }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
-        val creator = label("by: Adixu_YT", 42f, lightPurple, true).apply {
+        val creator = label("by: Adixu_YT", 40f, lightPurple).apply {
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(34), dp(8), dp(34))
-            letterSpacing = 0.04f
-            setShadowLayer(dp(18).toFloat(), 0f, 0f, purple)
+            typeface = Typeface.create("cursive", Typeface.BOLD_ITALIC)
+            letterSpacing = 0.10f
+            textScaleX = 1.04f
+            setTextColor(purple)
+            post {
+                val width = (paint.measureText(text.toString())).coerceAtLeast(1f)
+                paint.shader = android.graphics.LinearGradient(
+                    0f, 0f, width, 0f,
+                    intArrayOf(
+                        Color.rgb(190, 110, 255),
+                        Color.rgb(255, 125, 225),
+                        Color.rgb(130, 105, 255)
+                    ),
+                    null,
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+                invalidate()
+            }
+            setShadowLayer(dp(20).toFloat(), 0f, 0f, purple)
         }
         box.addView(creator, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = dp(24)
