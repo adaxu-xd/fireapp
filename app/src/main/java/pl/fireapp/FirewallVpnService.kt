@@ -101,7 +101,7 @@ class FirewallVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            prefs.edit().putBoolean("active", false).apply()
+            prefs.edit().putBoolean("active", false).putBoolean("tunnel_healthy", false).putLong("last_heartbeat", 0L).apply()
             cancelWatchdog()
             recoveryScheduled = false
             mainHandler.removeCallbacksAndMessages(null)
@@ -130,27 +130,29 @@ class FirewallVpnService : VpnService() {
 
         startForeground(NOTIFICATION_ID, buildNotification(mode))
         scheduleWatchdog()
+        mainHandler.removeCallbacks(heartbeat)
+        mainHandler.post(heartbeat)
         if (intent?.action == ACTION_CHECK && tunnelIsHealthy()) return START_STICKY
         startFirewall(packages, mode)
         return START_STICKY
     }
 
     private fun tunnelIsHealthy(): Boolean {
-        val descriptor = tun
         return prefs.getBoolean("active", false) &&
-            descriptor != null &&
-            running.get() && reader?.isAlive == true && vpnTransportIsActive()
+            tun != null &&
+            running.get() &&
+            reader?.isAlive == true
     }
 
-    private fun vpnTransportIsActive(): Boolean {
-        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-        return try {
-            connectivity.allNetworks.any { network ->
-                connectivity.getNetworkCapabilities(network)
-                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-            }
-        } catch (_: Exception) {
-            false
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            val healthy = prefs.getBoolean("active", false) &&
+                tun != null && running.get() && reader?.isAlive == true
+            prefs.edit()
+                .putBoolean("tunnel_healthy", healthy)
+                .putLong("last_heartbeat", if (healthy) System.currentTimeMillis() else 0L)
+                .apply()
+            if (prefs.getBoolean("active", false)) mainHandler.postDelayed(this, 5000L)
         }
     }
 
@@ -240,7 +242,7 @@ class FirewallVpnService : VpnService() {
             running.set(false)
             try { previousTun?.close() } catch (_: Exception) { }
             tun = descriptor
-            prefs.edit().putBoolean("active", true).apply()
+            prefs.edit().putBoolean("active", true).putBoolean("tunnel_healthy", true).putLong("last_heartbeat", System.currentTimeMillis()).apply()
             running.set(true)
             val thisGeneration = tunnelGeneration
             reader = Thread({
@@ -313,6 +315,7 @@ class FirewallVpnService : VpnService() {
         }
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) { }
         stopTunnel()
+        prefs.edit().putBoolean("tunnel_healthy", false).putLong("last_heartbeat", 0L).apply()
         super.onDestroy()
     }
 
