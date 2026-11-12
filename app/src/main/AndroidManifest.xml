@@ -117,7 +117,7 @@
         <activity-alias android:name=".Launcher_sunset_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_orange" android:label="FireApp">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-        <receiver android:name=".FirewallWatchdogReceiver" android:enabled="true" android:exported="true">
+        <receiver android:name=".FirewallWatchdogReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
                 <action android:name="pl.fireapp.CHECK" />
                 <action android:name="android.intent.action.USER_PRESENT" />
