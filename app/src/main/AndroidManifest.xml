@@ -117,7 +117,12 @@
         <activity-alias android:name=".Launcher_sunset_orange" android:targetActivity=".MainActivity" android:enabled="false" android:exported="true" android:icon="@drawable/fireapp_icon_sunset_orange" android:label="FireApp">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-        <receiver android:name=".FirewallWatchdogReceiver" android:enabled="true" android:exported="false" />
+        <receiver android:name=".FirewallWatchdogReceiver" android:enabled="true" android:exported="true">
+            <intent-filter>
+                <action android:name="pl.fireapp.CHECK" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+        </receiver>
         <service android:name=".FirewallVpnService" android:permission="android.permission.BIND_VPN_SERVICE" android:exported="true" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Local per-app network firewall using Android VpnService" />
             <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
