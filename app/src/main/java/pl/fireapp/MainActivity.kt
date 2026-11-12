@@ -328,13 +328,10 @@ class MainActivity : Activity() {
 
     private fun updateStatus(sub: TextView? = null) {
         val savedActive = prefs.getBoolean("active", false)
-        val vpnActive = try {
-            val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-            connectivity.allNetworks.any { network ->
-                connectivity.getNetworkCapabilities(network)
-                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-            }
-        } catch (_: Exception) { false }
+        val heartbeatAge = System.currentTimeMillis() - prefs.getLong("last_heartbeat", 0L)
+        val vpnActive = savedActive &&
+            prefs.getBoolean("tunnel_healthy", false) &&
+            heartbeatAge in 0..20_000L
         val active = (savedActive && vpnActive) || startRequested
         status.text = when {
             active && vpnActive -> "●  Zapora działa"
