@@ -9,6 +9,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.VpnService
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -33,6 +35,13 @@ class MainActivity : Activity() {
     private var loadedAppEntries: List<AppEntry> = emptyList()
     private var selectAllWhenLoaded = false
     private val appLoader = Executors.newSingleThreadExecutor()
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val statusPoll = object : Runnable {
+        override fun run() {
+            if (currentPage == "home" && ::status.isInitialized) updateStatus(statusSub)
+            statusHandler.postDelayed(this, 2000L)
+        }
+    }
     private data class AppEntry(val packageName: String, val name: String, val icon: android.graphics.drawable.Drawable)
     private inner class AppsAdapter(private val entries: List<AppEntry>) : BaseAdapter() {
         override fun getCount() = entries.size
@@ -318,10 +327,28 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus(sub: TextView? = null) {
-        val active = prefs.getBoolean("active", false) || startRequested
-        status.text = if (active) "●  Zapora działa" else "○  Zapora zatrzymana"
-        sub?.text = if (active) "Internet mają tylko zaznaczone aplikacje." else "Zaznacz aplikacje i naciśnij START."
-        if (::toggleButton.isInitialized) toggleButton.text = if (active) "■   STOP" else "▶   START"
+        val savedActive = prefs.getBoolean("active", false)
+        val vpnActive = try {
+            val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivity.allNetworks.any { network ->
+                connectivity.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        } catch (_: Exception) { false }
+        val active = (savedActive && vpnActive) || startRequested
+        status.text = when {
+            active && vpnActive -> "●  Zapora działa"
+            savedActive -> "◌  Ponowne łączenie VPN…"
+            startRequested -> "◌  Uruchamianie zapory…"
+            else -> "○  Zapora zatrzymana"
+        }
+        sub?.text = when {
+            active && vpnActive -> "Internet mają tylko zaznaczone aplikacje."
+            savedActive -> "VPN nie jest połączony. FireApp próbuje go przywrócić."
+            startRequested -> "Trwa uruchamianie lokalnej zapory VPN."
+            else -> "Zaznacz aplikacje i naciśnij START."
+        }
+        if (::toggleButton.isInitialized) toggleButton.text = if (savedActive || startRequested) "■   STOP" else "▶   START"
     }
 
     private fun refreshHomeControls() {
@@ -331,6 +358,22 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshHomeControls()
+        if (prefs.getBoolean("active", false) && VpnService.prepare(this) == null) {
+            try {
+                startForegroundService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_CHECK))
+            } catch (_: Exception) { }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        statusHandler.removeCallbacks(statusPoll)
+        statusHandler.post(statusPoll)
+    }
+
+    override fun onStop() {
+        statusHandler.removeCallbacks(statusPoll)
+        super.onStop()
     }
 
     private fun toggleFirewall() {
@@ -560,6 +603,11 @@ class MainActivity : Activity() {
 
     private fun autoStartFirewall() {
         mode = FirewallVpnService.MODE_ALLOW_SELECTED
+        if (prefs.getBoolean("active", false) && VpnService.prepare(this) == null) {
+            try {
+                startForegroundService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_CHECK))
+            } catch (_: Exception) { }
+        }
         updateStatus(if (::statusSub.isInitialized) statusSub else null)
     }
 
