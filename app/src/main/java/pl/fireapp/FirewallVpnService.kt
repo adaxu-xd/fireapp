@@ -138,7 +138,7 @@ class FirewallVpnService : VpnService() {
     private fun tunnelIsHealthy(): Boolean {
         val descriptor = tun
         return prefs.getBoolean("active", false) &&
-            descriptor != null && !descriptor.isClosed &&
+            descriptor != null &&
             running.get() && reader?.isAlive == true && vpnTransportIsActive()
     }
 
