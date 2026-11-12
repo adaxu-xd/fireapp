@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -42,6 +44,18 @@ class FirewallVpnService : VpnService() {
     private var recoveryScheduled = false
     private var packageReceiverRegistered = false
 
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_SCREEN_ON && intent.action != Intent.ACTION_USER_PRESENT) return
+            mainHandler.postDelayed({
+                if (!prefs.getBoolean("active", false)) return@postDelayed
+                val packages = prefs.getStringSet("selected_apps", emptySet())?.toList() ?: emptyList()
+                val mode = prefs.getString("mode", MODE_BLOCK_SELECTED) ?: MODE_BLOCK_SELECTED
+                if (!tunnelIsHealthy()) startFirewall(packages, mode)
+            }, 1200L)
+        }
+    }
+
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != Intent.ACTION_PACKAGE_ADDED) return
@@ -73,6 +87,16 @@ class FirewallVpnService : VpnService() {
             registerReceiver(packageReceiver, filter)
         }
         packageReceiverRegistered = true
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, screenFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(screenReceiver, screenFilter)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,7 +139,19 @@ class FirewallVpnService : VpnService() {
         val descriptor = tun
         return prefs.getBoolean("active", false) &&
             descriptor != null && !descriptor.isClosed &&
-            running.get() && reader?.isAlive == true
+            running.get() && reader?.isAlive == true && vpnTransportIsActive()
+    }
+
+    private fun vpnTransportIsActive(): Boolean {
+        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        return try {
+            connectivity.allNetworks.any { network ->
+                connectivity.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun watchdogPendingIntent(): PendingIntent {
@@ -275,6 +311,7 @@ class FirewallVpnService : VpnService() {
             try { unregisterReceiver(packageReceiver) } catch (_: Exception) { }
             packageReceiverRegistered = false
         }
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) { }
         stopTunnel()
         super.onDestroy()
     }
