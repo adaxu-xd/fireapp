@@ -306,7 +306,13 @@ class FirewallVpnService : VpnService() {
         super.onRevoke()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (prefs.getBoolean("active", false)) scheduleWatchdog()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        if (prefs.getBoolean("active", false)) scheduleWatchdog()
         recoveryScheduled = false
         mainHandler.removeCallbacksAndMessages(null)
         if (packageReceiverRegistered) {
