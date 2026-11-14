@@ -13,6 +13,7 @@ class FirewallWatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val prefs = context.getSharedPreferences("fireapp", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("active", false)) return
+        // Re-arm before attempting recovery so a failed background start does not end monitoring.
         scheduleNextCheck(context)
         if (VpnService.prepare(context) != null) {
             prefs.edit().putBoolean("active", false).apply()
